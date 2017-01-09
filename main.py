@@ -2,12 +2,30 @@ from gpiozero import MotionSensor
 from picamera import PiCamera
 from datetime import datetime
 from subprocess import call
+from subprocess import check_call
+from threading import Thread
 import os
 
+class dropboxThread (Thread):
+    def __init__(self, threadID, name, videoFilePath, dropboxSavePath):
+        Thread.__init__(self)
+        self.threadID = threadID
+        self.name = name
+        self.videoFilePath = videoFilePath
+        self.dropboxSavePath = dropboxSavePath
+    def run(self):
+        print "Uploading " + self.videoFilePath
+        try:
+        	check_call(['dropbox_uploader.sh','upload', self.videoFilePath, self.dropboxSavePath])    
+        except Exception as exp:
+                print('There was a problem uploading to Dropbox: ', self.videoFilePath, ': ', exp.args)
+        print "Uploaded " + self.videoFilePath
+	
 camera = PiCamera()
 pir = MotionSensor(4)
 VIDEOS_DIR = os.path.expanduser(os.path.join('~', 'Videos'))
 os.chdir(VIDEOS_DIR)
+idCounter = 0
 
 # Detect motion and record video while motion is detected
 while True:
@@ -34,21 +52,33 @@ while True:
             
         os.chdir(save_dir)
 
+		# Set file path for video
         filename = datetime.now().strftime("%H.%M.%S")
         videoFileName = os.path.join(save_dir, filename)
         tempVideoFile = videoFileName + '.h264'
         videoFile = videoFileName + '.mp4'
+        
+        # Start recording video
         camera.start_recording(tempVideoFile) 
         pir.wait_for_no_motion()
 
         # Motion no longer detected
         camera.stop_recording()
+        
+        # If the video file was saved convert it to MP4
         if os.path.isfile(tempVideoFile):
             try:
-              call(['MP4Box','-fps', '30', '-add', tempVideoFile, videoFile])
+              check_call(['MP4Box','-fps', '30', '-add', tempVideoFile, videoFile])
               os.remove(tempVideoFile);
             except(Exception, Argument):
                 print('There was a problem while converting ', videoFile, ': ', Argument)
+                
+            filename = os.path.basename(videoFile)
+            
+            idCounter += 1
+            
+            dropboxUploadThread = dropboxThread(idCounter, filename, videoFile, os.path.join(current_year, current_month, current_day, filename))
+            dropboxUploadThread.start()
     except:
         print("Security program ending")
         if camera.recording:
