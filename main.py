@@ -7,6 +7,7 @@ from subprocess import run
 from threading import Thread
 from time import sleep
 import os
+import warnings
 
 camera = PiCamera()
 pir = MotionSensor(4)
@@ -56,7 +57,10 @@ def init():
     while not running:
         initialized = 1
 
-        pir.when_motion = None
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            pir.when_motion = None
+
         armedLight.off()
         standbyLight.on()
 
